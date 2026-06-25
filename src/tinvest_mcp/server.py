@@ -5,6 +5,8 @@ from typing import Literal
 import structlog
 from mcp.server.fastmcp import FastMCP
 
+from mcp.server.transport_security import TransportSecuritySettings
+
 from tinvest_mcp.config import Settings, load_settings
 from tinvest_mcp.scheduler import build_scheduler
 from tinvest_mcp.storage import SnapshotStorage
@@ -66,6 +68,18 @@ def _configure_logging() -> None:
     )
 
 
+def _transport_security(settings: Settings) -> TransportSecuritySettings | None:
+    if settings.transport != "http":
+        return None
+    allowed: list[str] = ["localhost", "localhost:*", "127.0.0.1", "127.0.0.1:*"]
+    if settings.http_host and settings.http_host not in ("0.0.0.0", "127.0.0.1"):
+        allowed += [settings.http_host, f"{settings.http_host}:*"]
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=allowed,
+    )
+
+
 def build_server(settings: Settings) -> FastMCP:
     @asynccontextmanager
     async def lifespan(_: FastMCP):
@@ -88,7 +102,11 @@ def build_server(settings: Settings) -> FastMCP:
             scheduler.shutdown(wait=False)
             await http.aclose()
 
-    mcp = FastMCP("tinvest-mcp", lifespan=lifespan)
+    mcp = FastMCP(
+        "tinvest-mcp",
+        lifespan=lifespan,
+        transport_security=_transport_security(settings),
+    )
 
     def _client() -> TInvestClient:
         return mcp.get_context().request_context.lifespan_context["client"]
@@ -231,7 +249,7 @@ def _run_http(server: FastMCP, settings: Settings) -> None:
 
     app = server.streamable_http_app()
     app.add_middleware(BearerAuthMiddleware)
-    uvicorn.run(app, host="0.0.0.0", port=settings.http_port, log_level="info")
+    uvicorn.run(app, host=settings.http_host, port=settings.http_port, log_level="info")
 
 
 def main() -> None:

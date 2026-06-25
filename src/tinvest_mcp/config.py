@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     )
     transport: str = Field("stdio", description="MCP transport: stdio or http")
     http_port: int = Field(8000, description="HTTP transport port")
+    http_host: str = Field("0.0.0.0", description="HTTP transport bind host")
     mcp_token: str = Field("", description="Bearer token for HTTP transport auth")
 
 
