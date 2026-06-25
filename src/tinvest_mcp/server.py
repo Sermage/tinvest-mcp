@@ -18,6 +18,7 @@ from tinvest_mcp.tools import operations as operations_tool
 from tinvest_mcp.tools import portfolio as portfolio_tool
 from tinvest_mcp.tools import positions as positions_tool
 from tinvest_mcp.tools import tracker as tracker_tool
+from tinvest_mcp.tools import report as report_tool
 
 InstrumentKind = Literal[
     "INSTRUMENT_TYPE_UNSPECIFIED",
@@ -229,6 +230,22 @@ def build_server(settings: Settings) -> FastMCP:
     )
     async def get_portfolio_summary(account_id: str, days: int = 7) -> dict:
         return await tracker_tool.get_portfolio_summary(_storage(), account_id, days)
+
+    @mcp.tool(
+        name="generate_portfolio_report",
+        description=(
+            "Pipeline tool: fetch portfolio → aggregate positions → save HTML report to file. "
+            "Steps run automatically in sequence and return the report path. "
+            "output_path defaults to ~/portfolio_report.html"
+        ),
+    )
+    async def generate_portfolio_report(
+        account_id: str,
+        output_path: str = "~/portfolio_report.html",
+    ) -> dict:
+        return await report_tool.generate_portfolio_report(
+            _client(), _storage(), account_id, output_path
+        )
 
     return mcp
 
