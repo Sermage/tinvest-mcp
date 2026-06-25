@@ -215,11 +215,33 @@ def build_server(settings: Settings) -> FastMCP:
     return mcp
 
 
+def _run_http(server: FastMCP, settings: Settings) -> None:
+    import uvicorn
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request
+    from starlette.responses import Response
+
+    class BearerAuthMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            if settings.mcp_token:
+                auth = request.headers.get("Authorization", "")
+                if auth != f"Bearer {settings.mcp_token}":
+                    return Response("Unauthorized", status_code=401)
+            return await call_next(request)
+
+    app = server.streamable_http_app()
+    app.add_middleware(BearerAuthMiddleware)
+    uvicorn.run(app, host="0.0.0.0", port=settings.http_port, log_level="info")
+
+
 def main() -> None:
     _configure_logging()
     settings = load_settings()
     server = build_server(settings)
-    server.run()
+    if settings.transport == "http":
+        _run_http(server, settings)
+    else:
+        server.run()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,19 @@
+[Unit]
+Description=T-Invest MCP Server
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/tinvest-mcp
+EnvironmentFile=/opt/tinvest-mcp/.env
+ExecStart=/root/.local/bin/uv run --project /opt/tinvest-mcp tinvest-mcp
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tinvest-mcp
+
+[Install]
+WantedBy=multi-user.target

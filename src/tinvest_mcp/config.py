@@ -23,6 +23,9 @@ class Settings(BaseSettings):
         default_factory=lambda: _PROJECT_ROOT / "data" / "snapshots.db",
         description="Path to SQLite database file",
     )
+    transport: str = Field("stdio", description="MCP transport: stdio or http")
+    http_port: int = Field(8000, description="HTTP transport port")
+    mcp_token: str = Field("", description="Bearer token for HTTP transport auth")
 
 
 def load_settings() -> Settings:
