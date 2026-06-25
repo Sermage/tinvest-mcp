@@ -13,6 +13,9 @@ wheels/
 .env
 .env.local
 
+# SQLite data
+data/
+
 # Editor
 .idea/
 .vscode/

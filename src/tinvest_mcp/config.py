@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     sandbox: bool = Field(False, description="Use sandbox endpoint")
     readonly: bool = Field(True, description="Block any order-placing tools")
     app_name: str = Field("tinvest-mcp", description="x-app-name header value")
+    snapshot_interval: int = Field(60, description="Portfolio snapshot interval in minutes")
+    db_path: Path = Field(
+        default_factory=lambda: _PROJECT_ROOT / "data" / "snapshots.db",
+        description="Path to SQLite database file",
+    )
 
 
 def load_settings() -> Settings:

@@ -6,6 +6,8 @@ import structlog
 from mcp.server.fastmcp import FastMCP
 
 from tinvest_mcp.config import Settings, load_settings
+from tinvest_mcp.scheduler import build_scheduler
+from tinvest_mcp.storage import SnapshotStorage
 from tinvest_mcp.tinvest.client import TInvestClient, make_http_client
 from tinvest_mcp.tools import accounts as accounts_tool
 from tinvest_mcp.tools import instruments as instruments_tool
@@ -13,6 +15,7 @@ from tinvest_mcp.tools import market_data as market_data_tool
 from tinvest_mcp.tools import operations as operations_tool
 from tinvest_mcp.tools import portfolio as portfolio_tool
 from tinvest_mcp.tools import positions as positions_tool
+from tinvest_mcp.tools import tracker as tracker_tool
 
 InstrumentKind = Literal[
     "INSTRUMENT_TYPE_UNSPECIFIED",
@@ -66,16 +69,34 @@ def _configure_logging() -> None:
 def build_server(settings: Settings) -> FastMCP:
     @asynccontextmanager
     async def lifespan(_: FastMCP):
+        # init storage
+        settings.db_path.parent.mkdir(parents=True, exist_ok=True)
+        storage = SnapshotStorage(settings.db_path)
+        await storage.init()
+
+        # init HTTP client + T-Invest client
         http = make_http_client(settings)
+        client = TInvestClient(settings, http)
+
+        # start scheduler
+        scheduler = build_scheduler(client, storage, settings.snapshot_interval)
+        scheduler.start()
+
         try:
-            yield {"client": TInvestClient(settings, http)}
+            yield {"client": client, "storage": storage}
         finally:
+            scheduler.shutdown(wait=False)
             await http.aclose()
 
     mcp = FastMCP("tinvest-mcp", lifespan=lifespan)
 
     def _client() -> TInvestClient:
         return mcp.get_context().request_context.lifespan_context["client"]
+
+    def _storage() -> SnapshotStorage:
+        return mcp.get_context().request_context.lifespan_context["storage"]
+
+    # ── read-only market/portfolio tools ──────────────────────────────────────
 
     @mcp.tool(
         name="get_accounts",
@@ -156,6 +177,40 @@ def build_server(settings: Settings) -> FastMCP:
         return await market_data_tool.get_candles(
             _client(), from_, to, interval, figi, instrument_id
         )
+
+    # ── snapshot / tracker tools ──────────────────────────────────────────────
+
+    @mcp.tool(
+        name="trigger_snapshot",
+        description=(
+            "Immediately collect a portfolio snapshot for all accounts and save to DB. "
+            "The scheduler does this automatically every TINVEST_SNAPSHOT_INTERVAL minutes "
+            "(default 60). Use this tool to force a snapshot right now."
+        ),
+    )
+    async def trigger_snapshot() -> dict:
+        return await tracker_tool.trigger_snapshot(_client(), _storage())
+
+    @mcp.tool(
+        name="get_portfolio_history",
+        description=(
+            "Return the last N snapshots for an account from the local SQLite DB. "
+            "Each entry has timestamp, total_value, currency, and positions."
+        ),
+    )
+    async def get_portfolio_history(account_id: str, limit: int = 10) -> list[dict]:
+        return await tracker_tool.get_portfolio_history(_storage(), account_id, limit)
+
+    @mcp.tool(
+        name="get_portfolio_summary",
+        description=(
+            "Return an aggregated portfolio summary for an account over the last N days. "
+            "Includes total value now vs. start of period, delta in RUB/%, "
+            "and per-position expected yield delta (sorted best to worst)."
+        ),
+    )
+    async def get_portfolio_summary(account_id: str, days: int = 7) -> dict:
+        return await tracker_tool.get_portfolio_summary(_storage(), account_id, days)
 
     return mcp
 

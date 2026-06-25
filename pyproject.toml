@@ -13,6 +13,8 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "structlog>=24.1",
+    "aiosqlite>=0.20",
+    "apscheduler>=3.10",
 ]
 
 [project.scripts]
