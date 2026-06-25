@@ -192,7 +192,8 @@ async def generate_portfolio_report(
     path = pathlib.Path(output_path).expanduser().resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    path.write_text(_render_html(summary, generated_at), encoding="utf-8")
+    html = _render_html(summary, generated_at)
+    path.write_text(html, encoding="utf-8")
 
     return {
         "status": "ok",
@@ -201,4 +202,5 @@ async def generate_portfolio_report(
         "positions_count": len(summary["positions"]),
         "total_portfolio": summary["total_portfolio"],
         "generated_at": generated_at,
+        "html_content": html,
     }
